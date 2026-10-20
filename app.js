@@ -276,6 +276,12 @@
 
     // Close drawer if open when switching views
     closeArticleDrawer();
+
+    if (viewName === 'surf') {
+      startSurfAnimation();
+    } else {
+      stopSurfAnimation();
+    }
   }
 
   function handleHashChange() {
@@ -697,74 +703,315 @@
   }
 
   /* --------------------------------------------------------------------------
-     6. Surf 3D View Controller (With Wheel Scrolling)
+     6. Surf 3D View Controller (Exact Sine-Wave Ribbon from Real Site)
      -------------------------------------------------------------------------- */
+  let surfCurrentScroll = 0;
+  let surfTargetScroll = 0;
+  let surfVelocity = 0;
+  let surfWaveTime = 0;
+  let surfAnimId = null;
+  let surfItems = [];
+  let surfTotalWidth = 0;
+  let surfStepX = 80;
+  let surfStepY = 40;
+  let surfRestAmplitude = 14;
+  let surfHoveredIndex = -1;
+  const surfFloatingInfo = document.getElementById('surf-floating-info');
+  let surfListenersBound = false;
+
   function renderSurf() {
     if (!surfRibbon) return;
-    const articles = (siteData.articles || []).slice(0, 36);
+    const articles = (siteData.articles || []).slice(0, 48);
+    if (!articles.length) return;
 
     surfRibbon.innerHTML = articles.map((article, idx) => `
-      <div class="surf-card" data-slug="${escapeHtml(article.slug)}" data-index="${idx}">
-        <img src="${article.cover}" alt="${escapeHtml(article.title)}" loading="lazy" />
-      </div>
+      <article class="surf-carousel-item js-slide" data-slug="${escapeHtml(article.slug)}" data-index="${idx}">
+        <div class="surf-carousel-item__content js-slide-content">
+          <div class="surf-carousel-item__media">
+            <img src="${article.cover}" alt="${escapeHtml(article.title)}" loading="lazy" />
+          </div>
+        </div>
+      </article>
     `).join('');
 
-    setupSurfDrag();
+    measureSurf();
+    setupSurfEvents();
+    if (currentView === 'surf') {
+      startSurfAnimation();
+    }
   }
 
-  let surfListenersBound = false;
-  function setupSurfDrag() {
+  function measureSurf() {
+    if (!surfRibbon) return;
+    const itemEls = Array.from(surfRibbon.querySelectorAll('.surf-carousel-item'));
+    if (!itemEls.length) return;
+
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+    const isSmall = ww < 768;
+    const P = isSmall ? 6 : 18;
+    surfStepX = ww / P;
+    surfStepY = wh / (P * 1.5);
+    surfRestAmplitude = surfStepY * 0.35;
+
+    const cardWidth = itemEls[0]?.offsetWidth || (isSmall ? 224 : 304);
+
+    surfItems = itemEls.map((el, idx) => {
+      const left = surfStepX * idx;
+      const width = cardWidth;
+      const end = left + width;
+      const start = left - width - ww;
+      const article = (siteData.articles || [])[idx] || {};
+
+      el.onmouseenter = () => {
+        surfHoveredIndex = idx;
+        updateSurfInfo(article, idx);
+      };
+      el.onmouseleave = () => {
+        if (surfHoveredIndex === idx) {
+          surfHoveredIndex = -1;
+          updateSurfInfo(null, -1);
+        }
+      };
+
+      return {
+        el,
+        index: idx,
+        slug: el.dataset.slug,
+        article,
+        left,
+        width,
+        start,
+        end
+      };
+    });
+
+    surfTotalWidth = Math.max(0, (surfStepX * (surfItems.length - 1)) + cardWidth);
+  }
+
+  function updateSurfInfo(article, idx) {
+    if (!surfFloatingInfo) return;
+    if (idx >= 0 && article) {
+      const tag = article.tag || 'EDITORIAL';
+      const month = article.month || 'MARCH';
+      surfFloatingInfo.textContent = `(${idx + 1}) ${tag} / ${month}`;
+    } else {
+      surfFloatingInfo.textContent = '';
+    }
+  }
+
+  function wrap(min, max, value) {
+    const range = max - min;
+    if (range <= 0) return min;
+    return ((((value - min) % range) + range) % range) + min;
+  }
+
+  function updateSurfFrame() {
+    if (!surfItems.length) return;
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+
+    // Smooth lerp:
+    const diff = surfTargetScroll - surfCurrentScroll;
+    surfVelocity = diff * 0.12;
+    surfCurrentScroll += surfVelocity;
+    surfWaveTime += 0.022;
+
+    const absVel = Math.abs(surfVelocity);
+
+    surfItems.forEach(item => {
+      const minWrap = -(surfTotalWidth - item.end);
+      const maxWrap = item.end;
+      const n = wrap(minWrap, maxWrap, surfCurrentScroll);
+
+      const inside = n > item.start && n < item.end;
+      if (!inside) {
+        item.el.style.visibility = 'hidden';
+        return;
+      }
+      item.el.style.visibility = 'visible';
+
+      const o = Math.max(0, Math.min(1, 1 + (n - item.left - item.width) / (ww + item.width)));
+      const p = 1 - (1 - o);
+      const x = p - 0.5;
+      const wave = Math.sin(surfWaveTime + x * Math.PI * 2) * surfRestAmplitude * (1 + absVel * 0.015);
+      const translateY = (wh * 0.45 * x) + wave;
+      const translateX = item.left - n;
+      const rotateY = -(15 * p) - 70;
+
+      const zIndex = surfHoveredIndex === item.index ? 1000 : Math.round(p * 100) + 10;
+      item.el.style.zIndex = zIndex;
+
+      item.el.style.transform = `translate3d(${translateX.toFixed(1)}px, ${translateY.toFixed(1)}px, 0px) rotateY(${rotateY.toFixed(1)}deg)`;
+    });
+  }
+
+  function surfAnimationLoop() {
+    if (currentView !== 'surf') {
+      surfAnimId = null;
+      return;
+    }
+    updateSurfFrame();
+    surfAnimId = requestAnimationFrame(surfAnimationLoop);
+  }
+
+  function startSurfAnimation() {
+    if (surfAnimId) return;
+    measureSurf();
+    surfAnimId = requestAnimationFrame(surfAnimationLoop);
+  }
+
+  function stopSurfAnimation() {
+    if (surfAnimId) {
+      cancelAnimationFrame(surfAnimId);
+      surfAnimId = null;
+    }
+  }
+
+  function setupSurfEvents() {
     if (!surfContainer || surfListenersBound) return;
     surfListenersBound = true;
 
+    const isSmall = () => window.innerWidth < 768;
+    const dragMultiplier = () => (isSmall() ? 3.5 : 2.0);
+
     let isDown = false;
     let startX = 0;
-    let scrollLeft = 0;
+    let startY = 0;
+    let dragStartScroll = 0;
     let draggedDist = 0;
+    let lastX = 0;
+    let lastTime = 0;
+    let dragVelocity = 0;
 
+    // Mouse drag
     surfContainer.addEventListener('mousedown', (e) => {
       isDown = true;
       surfContainer.classList.add('is-dragging');
-      startX = e.pageX - surfContainer.offsetLeft;
-      scrollLeft = surfContainer.scrollLeft;
+      startX = e.clientX;
+      startY = e.clientY;
+      lastX = e.clientX;
+      lastTime = Date.now();
+      dragStartScroll = surfTargetScroll;
       draggedDist = 0;
-    });
-
-    window.addEventListener('mouseleave', () => {
-      isDown = false;
-      surfContainer.classList.remove('is-dragging');
-    });
-
-    window.addEventListener('mouseup', () => {
-      isDown = false;
-      surfContainer.classList.remove('is-dragging');
+      dragVelocity = 0;
     });
 
     window.addEventListener('mousemove', (e) => {
       if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - surfContainer.offsetLeft;
-      const walk = (x - startX) * 1.8;
-      draggedDist += Math.abs(walk);
-      surfContainer.scrollLeft = scrollLeft - walk;
+      const now = Date.now();
+      const dt = now - lastTime || 16;
+      const dx = e.clientX - lastX;
+      dragVelocity = dx / dt;
+      lastX = e.clientX;
+      lastTime = now;
+
+      const totalDx = e.clientX - startX;
+      draggedDist += Math.abs(dx);
+      surfTargetScroll = dragStartScroll - (totalDx * dragMultiplier());
+      if (!surfAnimId) startSurfAnimation();
     });
 
-    // Wheel scrolling on Surf container
+    window.addEventListener('mouseup', () => {
+      if (!isDown) return;
+      isDown = false;
+      surfContainer.classList.remove('is-dragging');
+      if (Math.abs(dragVelocity) > 0.15) {
+        surfTargetScroll -= dragVelocity * 220;
+      }
+    });
+
+    // Touch events
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartScroll = 0;
+    let touchVelocity = 0;
+    let lastTouchX = 0;
+    let lastTouchTime = 0;
+    let isTouchDragging = false;
+
+    surfContainer.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      lastTouchX = touchStartX;
+      lastTouchTime = Date.now();
+      touchStartScroll = surfTargetScroll;
+      touchVelocity = 0;
+      draggedDist = 0;
+      isTouchDragging = true;
+    }, { passive: true });
+
+    surfContainer.addEventListener('touchmove', (e) => {
+      if (!isTouchDragging || e.touches.length !== 1) return;
+      const now = Date.now();
+      const dt = now - lastTouchTime || 16;
+      const cx = e.touches[0].clientX;
+      const cy = e.touches[0].clientY;
+      const dx = cx - lastTouchX;
+      touchVelocity = dx / dt;
+      lastTouchX = cx;
+      lastTouchTime = now;
+
+      const totalDx = cx - touchStartX;
+      const totalDy = cy - touchStartY;
+
+      if (Math.abs(totalDx) > Math.abs(totalDy) && e.cancelable) {
+        e.preventDefault();
+      }
+
+      draggedDist += Math.abs(dx);
+      surfTargetScroll = touchStartScroll - (totalDx * dragMultiplier());
+      if (!surfAnimId) startSurfAnimation();
+    }, { passive: false });
+
+    surfContainer.addEventListener('touchend', () => {
+      if (!isTouchDragging) return;
+      isTouchDragging = false;
+      if (Math.abs(touchVelocity) > 0.15) {
+        surfTargetScroll -= touchVelocity * 220;
+      }
+    });
+
+    // Wheel scrolling
     surfContainer.addEventListener('wheel', (e) => {
-      const section = document.getElementById('view-surf');
-      if (!section || !section.classList.contains('is-active')) return;
+      if (currentView !== 'surf') return;
       if (activeArticleSlug) return;
 
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      surfContainer.scrollLeft += delta * 1.5;
+      surfTargetScroll += delta * 1.5;
+      if (!surfAnimId) startSurfAnimation();
     }, { passive: false });
 
+    // Keyboard ArrowLeft / ArrowRight
+    window.addEventListener('keydown', (e) => {
+      if (currentView !== 'surf' || activeArticleSlug) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        surfTargetScroll += surfStepX * 4;
+        if (!surfAnimId) startSurfAnimation();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        surfTargetScroll -= surfStepX * 4;
+        if (!surfAnimId) startSurfAnimation();
+      }
+    });
+
+    // Card click
     surfContainer.addEventListener('click', (e) => {
-      const card = e.target.closest('.surf-card');
-      if (card && draggedDist < 10) {
-        const slug = card.dataset.slug;
-        openArticleDrawer(slug);
+      if (draggedDist > 10) return;
+      const card = e.target.closest('.surf-carousel-item');
+      if (card && card.dataset.slug) {
+        openArticleDrawer(card.dataset.slug);
+      }
+    });
+
+    // Window resize
+    window.addEventListener('resize', () => {
+      if (currentView === 'surf') {
+        measureSurf();
+        updateSurfFrame();
       }
     });
   }
