@@ -1,0 +1,50 @@
+{
+  "admin.js": {
+    "mtime": 1792491687.9334915,
+    "seen": 1792492378.9122066,
+    "ast_hash": "c3d164ca91a909f5fe8a3959f13f72e9",
+    "semantic_hash": "c3d164ca91a909f5fe8a3959f13f72e9"
+  },
+  "app.js": {
+    "mtime": 1792492093.0244513,
+    "seen": 1792492378.912214,
+    "ast_hash": "14395f814b5ea7f25d91e45432e5be24",
+    "semantic_hash": "14395f814b5ea7f25d91e45432e5be24"
+  },
+  "site-data.js": {
+    "mtime": 1792492157.7452872,
+    "seen": 1792492378.912218,
+    "ast_hash": "b24c33c22a2a7490e889539038f6da5b",
+    "semantic_hash": "b24c33c22a2a7490e889539038f6da5b"
+  },
+  "tests/test_store.js": {
+    "mtime": 1792490555.85502,
+    "seen": 1792492378.9122214,
+    "ast_hash": "ae68d37c39f9bbc27e7e379656aa416f",
+    "semantic_hash": "ae68d37c39f9bbc27e7e379656aa416f"
+  },
+  "admin.html": {
+    "mtime": 1792491578.4655657,
+    "seen": 1792492378.9122262,
+    "ast_hash": "56cd2743a09f4d37ac29d664c20e3916",
+    "semantic_hash": "56cd2743a09f4d37ac29d664c20e3916"
+  },
+  "docs/superpowers/plans/2026-10-20-the-lookback-implementation.md": {
+    "mtime": 1792490166.020084,
+    "seen": 1792492378.9122307,
+    "ast_hash": "bb69014801cfa0e7b3a204184d809cb8",
+    "semantic_hash": "bb69014801cfa0e7b3a204184d809cb8"
+  },
+  "docs/superpowers/specs/2026-10-20-the-lookback-design.md": {
+    "mtime": 1792490143.7859175,
+    "seen": 1792492378.912234,
+    "ast_hash": "90e371c618589ccb490394af0a9c00d3",
+    "semantic_hash": "90e371c618589ccb490394af0a9c00d3"
+  },
+  "index.html": {
+    "mtime": 1792491432.028673,
+    "seen": 1792492378.9122367,
+    "ast_hash": "2de8f5445e109799a44a67b0354537ee",
+    "semantic_hash": "2de8f5445e109799a44a67b0354537ee"
+  }
+}
