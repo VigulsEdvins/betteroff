@@ -596,7 +596,7 @@
           `;
         }
       }
-      drawerBody.innerHTML = contentHtml;
+      drawerBody.innerHTML = sanitizeHtml(contentHtml);
     }
 
     if (articleDrawer) {
@@ -637,6 +637,24 @@
       '"': '&quot;',
       "'": '&#39;'
     })[m]);
+  }
+
+  function sanitizeHtml(dirty) {
+    if (typeof dirty !== 'string') return '';
+    let clean = dirty
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+      .replace(/<embed\b[^>]*>/gi, '')
+      .replace(/on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '')
+      .replace(/javascript:/gi, '');
+
+    clean = clean.replace(/<iframe\b([^>]*)>/gi, (match, attrs) => {
+      if (/src=["']https:\/\/(www\.youtube\.com|player\.vimeo\.com)\//i.test(attrs)) {
+        return `<iframe ${attrs}>`;
+      }
+      return '';
+    });
+    return clean;
   }
 
   /* --------------------------------------------------------------------------

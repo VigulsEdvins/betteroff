@@ -1658,9 +1658,22 @@
         if (!parsed || typeof parsed !== 'object') {
           throw new Error('Invalid JSON structure: expected root object');
         }
-        if (!Array.isArray(parsed.articles) || !Array.isArray(parsed.tracks)) {
-          throw new Error('Missing required "articles" or "tracks" array');
-        }
+        parsed.articles = parsed.articles.map(function (a) {
+          return {
+            id: sanitize(a.id) || ('art_' + Date.now()),
+            index: parseInt(a.index, 10) || 1,
+            title: sanitize(a.title) || 'Untitled',
+            slug: sanitize(a.slug) || ('art-' + Date.now()),
+            month: sanitize(a.month) || 'MARCH',
+            tag: sanitize(a.tag) || 'INSPIRE',
+            date: sanitize(a.date) || '',
+            cover: sanitize(a.cover) || './assets/images/defective-units-vol-1.webp',
+            url: sanitize(a.url) || '',
+            aspect: typeof a.aspect === 'number' ? a.aspect : 1.25,
+            excerpt: sanitize(a.excerpt) || '',
+            content: sanitize(a.content) || ''
+          };
+        });
         var valid = this.save(parsed);
         if (valid) {
           if (typeof localStorage !== 'undefined') {
