@@ -1552,15 +1552,38 @@
 
   var listeners = [];
 
+  function escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[&<>"']/g, function (m) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[m];
+    });
+  }
+
+  function sanitizeHtml(dirty) {
+    if (typeof dirty !== 'string') return '';
+    return dirty
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+  }
+
   function sanitize(str) {
     if (typeof str !== 'string') return str;
-    return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    return sanitizeHtml(str);
   }
 
   var TLBStore = {
     STORAGE_KEY: STORAGE_KEY,
     DRAFT_STORAGE_KEY: DRAFT_STORAGE_KEY,
     CHANNEL_NAME: CHANNEL_NAME,
+    escapeHtml: escapeHtml,
+    sanitizeHtml: sanitizeHtml,
 
     getDefaultData: function () {
       return JSON.parse(JSON.stringify(TLB_DEFAULT_DATA));
@@ -1654,26 +1677,35 @@
 
     importJSON: function (jsonStr) {
       try {
+        if (typeof jsonStr !== 'string' || jsonStr.length > 10 * 1024 * 1024) {
+          throw new Error('Payload too large or invalid string');
+        }
         var parsed = JSON.parse(jsonStr);
-        if (!parsed || typeof parsed !== 'object') {
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
           throw new Error('Invalid JSON structure: expected root object');
         }
-        parsed.articles = parsed.articles.map(function (a) {
-          return {
-            id: sanitize(a.id) || ('art_' + Date.now()),
-            index: parseInt(a.index, 10) || 1,
-            title: sanitize(a.title) || 'Untitled',
-            slug: sanitize(a.slug) || ('art-' + Date.now()),
-            month: sanitize(a.month) || 'MARCH',
-            tag: sanitize(a.tag) || 'INSPIRE',
-            date: sanitize(a.date) || '',
-            cover: sanitize(a.cover) || './assets/images/defective-units-vol-1.webp',
-            url: sanitize(a.url) || '',
-            aspect: typeof a.aspect === 'number' ? a.aspect : 1.25,
-            excerpt: sanitize(a.excerpt) || '',
-            content: sanitize(a.content) || ''
-          };
-        });
+        delete parsed.__proto__;
+        delete parsed.constructor;
+        delete parsed.prototype;
+
+        if (Array.isArray(parsed.articles)) {
+          parsed.articles = parsed.articles.map(function (a) {
+            return {
+              id: sanitize(a.id) || ('art_' + Date.now()),
+              index: parseInt(a.index, 10) || 1,
+              title: sanitize(a.title) || 'Untitled',
+              slug: sanitize(a.slug) || ('art-' + Date.now()),
+              month: sanitize(a.month) || 'MARCH',
+              tag: sanitize(a.tag) || 'INSPIRE',
+              date: sanitize(a.date) || '',
+              cover: sanitize(a.cover) || './assets/images/defective-units-vol-1.webp',
+              url: sanitize(a.url) || '',
+              aspect: typeof a.aspect === 'number' ? a.aspect : 1.25,
+              excerpt: sanitize(a.excerpt) || '',
+              content: sanitize(a.content) || ''
+            };
+          });
+        }
         var valid = this.save(parsed);
         if (valid) {
           if (typeof localStorage !== 'undefined') {

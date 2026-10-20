@@ -547,6 +547,11 @@
       return;
     }
 
+    if (file.size > 3 * 1024 * 1024) {
+      showToast('Image file too large (>3MB). Please compress it first to prevent exceeding browser storage limits.', 'error');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target.result;
@@ -754,6 +759,9 @@
      10. Utility Functions
      -------------------------------------------------------------------------- */
   function escapeHtml(str) {
+    if (window.TLBStore && typeof window.TLBStore.escapeHtml === 'function') {
+      return window.TLBStore.escapeHtml(str);
+    }
     if (typeof str !== 'string') return '';
     return str.replace(/[&<>"']/g, m => ({
       '&': '&amp;',

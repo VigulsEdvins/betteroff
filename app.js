@@ -629,6 +629,9 @@
      10. Utility Functions
      -------------------------------------------------------------------------- */
   function escapeHtml(str) {
+    if (window.TLBStore && typeof window.TLBStore.escapeHtml === 'function') {
+      return window.TLBStore.escapeHtml(str);
+    }
     if (typeof str !== 'string') return '';
     return str.replace(/[&<>"']/g, m => ({
       '&': '&amp;',
