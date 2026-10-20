@@ -306,39 +306,75 @@
   let timelineAnimId = null;
   let currentActiveMonth = '';
 
-  const monthsOrder = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
+  const MONTH_NAMES = [
+    'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'
+  ];
 
-  function getMonthRank(m) {
-    const idx = monthsOrder.indexOf(String(m || '').toUpperCase());
-    return idx === -1 ? 999 : idx;
+  function getArticleDateInfo(article) {
+    let year = 2026;
+    let monthIdx = 2; // Default to March
+
+    if (article.date && typeof article.date === 'string') {
+      const parts = article.date.split('-');
+      if (parts.length >= 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        if (!isNaN(y)) year = y;
+        if (!isNaN(m) && m >= 1 && m <= 12) monthIdx = m - 1;
+      }
+    } else if (article.year) {
+      year = parseInt(article.year, 10) || 2026;
+    }
+
+    if (article.month) {
+      const mIdx = MONTH_NAMES.indexOf(String(article.month).toUpperCase());
+      if (mIdx !== -1) monthIdx = mIdx;
+    }
+
+    const monthName = MONTH_NAMES[monthIdx];
+    const shortYear = String(year).slice(-2);
+    const sortVal = (year * 100) + monthIdx;
+
+    return {
+      year,
+      shortYear,
+      monthName,
+      monthIdx,
+      sortVal,
+      groupKey: `${monthName} '${shortYear}`
+    };
   }
 
   function renderTimeline() {
     if (!timelineTrack) return;
     const rawArticles = siteData.articles || [];
 
-    // Sort articles chronologically by month to create continuous chronological flow
+    // Sort articles chronologically descending (newest year/month first, e.g. 2027 January before 2026 March)
     const articles = rawArticles.slice().sort((a, b) => {
-      const rA = getMonthRank(a.month);
-      const rB = getMonthRank(b.month);
-      if (rA !== rB) return rA - rB;
+      const infoA = getArticleDateInfo(a);
+      const infoB = getArticleDateInfo(b);
+      if (infoA.sortVal !== infoB.sortVal) {
+        return infoB.sortVal - infoA.sortVal;
+      }
       return (a.index || 0) - (b.index || 0);
     });
 
-    let currentMonthGroup = '';
+    let currentGroup = '';
     timelineTrack.innerHTML = articles.map((article, idx) => {
-      const isNewMonth = article.month && article.month.toUpperCase() !== currentMonthGroup;
-      if (isNewMonth) {
-        currentMonthGroup = article.month.toUpperCase();
+      const info = getArticleDateInfo(article);
+      const isNewGroup = info.groupKey !== currentGroup;
+      if (isNewGroup) {
+        currentGroup = info.groupKey;
       }
       return `
-        <article class="timeline-card" data-slug="${escapeHtml(article.slug)}" data-month="${escapeHtml(article.month || '')}" data-index="${idx}">
-          ${isNewMonth ? `<div class="timeline-month-flag"><span>${escapeHtml(article.month.toUpperCase())}</span> <span>'26</span></div>` : ''}
+        <article class="timeline-card" data-slug="${escapeHtml(article.slug)}" data-month="${escapeHtml(info.monthName)}" data-year="${info.year}" data-group="${escapeHtml(info.groupKey)}" data-index="${idx}">
+          ${isNewGroup ? `<div class="timeline-month-flag"><span>${escapeHtml(info.monthName)}</span> <span>'${info.shortYear}</span></div>` : ''}
           <span class="timeline-card__badge-top">${article.index || (idx + 1)}</span>
           <div class="timeline-card__media" style="aspect-ratio: ${article.aspect || 1.25};">
             <img src="${article.cover}" alt="${escapeHtml(article.title)}" class="timeline-card__img" loading="lazy" />
           </div>
-          <span class="timeline-card__badge-bottom">${escapeHtml(article.tag || 'INSPIRE')} (${escapeHtml(article.month || '')})</span>
+          <span class="timeline-card__badge-bottom">${escapeHtml(article.tag || 'INSPIRE')} (${escapeHtml(info.monthName)})</span>
         </article>
       `;
     }).join('');
@@ -361,39 +397,44 @@
     }
     rulerTicks.innerHTML = ticksHtml;
 
-    // Extract available months from articles in chronological order
-    const chronologicalMonths = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
-    const seen = new Set();
-    (siteData.articles || []).forEach(a => {
-      if (a.month) seen.add(a.month.toUpperCase());
+    // Extract month groups in chronological order
+    const rawArticles = siteData.articles || [];
+    const groups = [];
+    const seenGroups = new Set();
+
+    // Sort to extract groups in chronological order
+    rawArticles.slice().sort((a, b) => getArticleDateInfo(b).sortVal - getArticleDateInfo(a).sortVal).forEach(a => {
+      const info = getArticleDateInfo(a);
+      if (!seenGroups.has(info.groupKey)) {
+        seenGroups.add(info.groupKey);
+        groups.push(info);
+      }
     });
 
-    const months = chronologicalMonths.filter(m => seen.has(m));
-    if (months.length === 0) {
-      months.push('MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL');
+    if (groups.length === 0) {
+      groups.push({ groupKey: "MARCH '26", monthName: "MARCH", year: 2026, shortYear: "26" });
     }
 
-    rulerMonths.innerHTML = months.map((m, idx) => `
-      <button type="button" class="ruler-month-btn ${idx === 0 ? 'is-active' : ''}" data-month="${escapeHtml(m)}">
-        ${escapeHtml(m)}
+    rulerMonths.innerHTML = groups.map((g, idx) => `
+      <button type="button" class="ruler-month-btn ${idx === 0 ? 'is-active' : ''}" data-month="${escapeHtml(g.monthName)}" data-year="${g.year}" data-group="${escapeHtml(g.groupKey)}">
+        ${escapeHtml(g.groupKey)}
       </button>
     `).join('');
 
-    // Bind click events on month buttons to jump directly to that month
+    // Bind click events on month buttons to jump directly to that month group
     rulerMonths.querySelectorAll('.ruler-month-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const targetMonth = btn.dataset.month;
-        scrollToMonth(targetMonth);
+        const targetGroup = btn.dataset.group;
+        scrollToMonthGroup(targetGroup);
       });
     });
   }
 
-  function scrollToMonth(month) {
+  function scrollToMonthGroup(groupKey) {
     if (!timelineTrack || !timelineViewport) return;
-    const upper = String(month).toUpperCase();
     const cards = Array.from(timelineTrack.querySelectorAll('.timeline-card'));
-    const targetCard = cards.find(c => String(c.dataset.month || '').toUpperCase() === upper);
+    const targetCard = cards.find(c => c.dataset.group === groupKey);
     if (targetCard) {
       timelineTargetX = Math.max(0, targetCard.offsetLeft - 80);
       clampTimelineTarget();
@@ -455,7 +496,7 @@
 
     let activeCard = null;
 
-    // If near the end of timeline scroll, pick the last card (e.g. APRIL)
+    // If near the end of timeline scroll, pick the last card
     if (timelineMaxX > 0 && timelineCurrentX >= timelineMaxX - 80) {
       activeCard = cards[cards.length - 1];
     } else {
@@ -472,33 +513,35 @@
       });
     }
 
-    if (activeCard && activeCard.dataset.month) {
-      const month = String(activeCard.dataset.month).toUpperCase();
-      if (month !== currentActiveMonth) {
-        currentActiveMonth = month;
-        onActiveMonthChanged(month);
+    if (activeCard) {
+      const groupKey = activeCard.dataset.group || '';
+      if (groupKey !== currentActiveMonth) {
+        currentActiveMonth = groupKey;
+        onActiveMonthChanged(activeCard);
       }
     }
   }
 
-  function onActiveMonthChanged(month) {
-    const upper = String(month).toUpperCase();
+  function onActiveMonthChanged(activeCard) {
+    const month = (activeCard.dataset.month || 'MARCH').toUpperCase();
+    const shortYear = activeCard.dataset.year ? String(activeCard.dataset.year).slice(-2) : '26';
+    const groupKey = activeCard.dataset.group || `${month} '${shortYear}`;
 
     // 1. Update ruler buttons
     if (rulerMonths) {
       rulerMonths.querySelectorAll('.ruler-month-btn').forEach(btn => {
-        btn.classList.toggle('is-active', String(btn.dataset.month || '').toUpperCase() === upper);
+        btn.classList.toggle('is-active', btn.dataset.group === groupKey);
       });
-      const activeBtn = rulerMonths.querySelector(`.ruler-month-btn[data-month="${upper}"]`);
+      const activeBtn = rulerMonths.querySelector(`.ruler-month-btn[data-group="${groupKey}"]`);
       if (activeBtn) {
         activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
 
-    // 2. Update header branding row (BO®S/MONTH '26)
+    // 2. Update header branding row (BO®S/MONTH 'YEAR)
     const brandRow3 = document.getElementById('brand-row-3');
     if (brandRow3) {
-      brandRow3.innerHTML = `(BO®S/${escapeHtml(upper)} '26)`;
+      brandRow3.innerHTML = `(BO®S/${escapeHtml(month)} '${shortYear})`;
     }
 
     // 3. Play tick SFX
@@ -731,36 +774,40 @@
      -------------------------------------------------------------------------- */
   function renderIndex() {
     if (!indexGrid) return;
-    const articles = siteData.articles || [];
+    const rawArticles = siteData.articles || [];
 
-    const monthsOrder = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
     const groups = {};
-    monthsOrder.forEach(m => groups[m] = []);
+    const groupOrder = [];
 
-    articles.forEach(a => {
-      const m = a.month || 'MARCH';
-      if (!groups[m]) groups[m] = [];
-      groups[m].push(a);
+    // Sort newest year and month first
+    const sorted = rawArticles.slice().sort((a, b) => getArticleDateInfo(b).sortVal - getArticleDateInfo(a).sortVal);
+
+    sorted.forEach(a => {
+      const info = getArticleDateInfo(a);
+      if (!groups[info.groupKey]) {
+        groups[info.groupKey] = { info, list: [] };
+        groupOrder.push(info.groupKey);
+      }
+      groups[info.groupKey].list.push(a);
     });
-
-    const activeMonths = monthsOrder.filter(m => (groups[m] || []).length > 0);
 
     let html = `
       <div class="index-month-nav" id="index-month-nav">
-        ${activeMonths.map(m => `
-          <button type="button" class="index-month-nav-btn" data-target="index-month-${escapeHtml(m)}">
-            ${escapeHtml(m)} (${groups[m].length})
+        ${groupOrder.map(k => `
+          <button type="button" class="index-month-nav-btn" data-target="index-group-${escapeHtml(k.replace(/\s+/g, '-').replace(/'/g, ''))}">
+            ${escapeHtml(k)} (${groups[k].list.length})
           </button>
         `).join('')}
       </div>
     `;
 
-    activeMonths.forEach(m => {
-      const list = groups[m] || [];
+    groupOrder.forEach(k => {
+      const { info, list } = groups[k];
+      const sectionId = `index-group-${escapeHtml(k.replace(/\s+/g, '-').replace(/'/g, ''))}`;
       html += `
-        <div class="index-month-section" id="index-month-${escapeHtml(m)}">
+        <div class="index-month-section" id="${sectionId}">
           <div class="index-month-header">
-            <span>${escapeHtml(m)}</span>
+            <span>${escapeHtml(info.monthName)} '${info.shortYear}</span>
             <span>(${list.length} ITEMS)</span>
           </div>
           <div class="index-cards-row">
