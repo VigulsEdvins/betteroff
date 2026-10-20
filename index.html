@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>THE LOOKBACK — Better Off®</title>
+  <meta name="description" content="Welcome to The Lookback — a digital reflection of our pulse, taste, and personality. Moments, music, and work that keep us moving." />
+  <meta property="og:title" content="THE LOOKBACK — Better Off®" />
+  <meta property="og:description" content="Welcome to The Lookback — a digital reflection of our pulse, taste, and personality." />
+  <meta property="og:image" content="./assets/images/defective-units-vol-1.webp" />
+  <link rel="icon" type="image/gif" href="./assets/images/favicon.gif" />
+
+  <!-- Preload Core Fonts -->
+  <link rel="preload" href="./assets/fonts/PPNeueMontreal-Bold.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/PPNeueMontreal-Medium.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/PPNeueMontreal-Book.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="./assets/fonts/PPNeueMontrealMono-Medium.woff2" as="font" type="font/woff2" crossorigin />
+
+  <link rel="stylesheet" href="./styles.css?v=3" />
+</head>
+<body class="is-loading has-grain">
+
+  <!-- Grain / Film Noise Overlay -->
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <!-- Audio Intro Gate Modal -->
+  <aside id="sound-gate" class="sound-gate" role="dialog" aria-modal="true" aria-label="Enter Lookback Sound Gate">
+    <div class="sound-gate__backdrop"></div>
+    <div class="sound-gate__content">
+      <div class="sound-gate__header">
+        <span class="sound-gate__status">LOADED</span>
+      </div>
+
+      <div class="sound-gate__center">
+        <div class="sound-gate__brand">
+          <span class="sound-gate__mark">(BO®S)</span>
+          <h1 class="sound-gate__title">TLB/2026</h1>
+        </div>
+
+        <div class="sound-gate__actions">
+          <button type="button" id="btn-enter-sound" class="btn-gate btn-gate--primary">
+            <span>Enter with sound</span>
+            <svg viewBox="0 0 10 10" width="10" height="10" fill="currentColor" aria-hidden="true">
+              <path d="M1 5h8M6 2l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-enter-silent" class="btn-gate btn-gate--text">
+            ...or without
+          </button>
+        </div>
+      </div>
+
+      <div class="sound-gate__footer">
+        <div class="sound-gate__month-stats" id="sound-gate-stats">
+          <!-- Populated dynamically from site-data -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Top Sticky Header -->
+  <header class="site-header" id="site-header">
+    <div class="site-header__inner">
+      <!-- Main Navigation -->
+      <nav class="site-nav" aria-label="Main Navigation">
+        <a href="#timeline" class="nav-link is-active" data-view="timeline">Timeline,</a>
+        <a href="#surf" class="nav-link" data-view="surf">Surf,</a>
+        <a href="#articles" class="nav-link" data-view="articles">Index,</a>
+        <a href="#about" class="nav-link" data-view="about">About</a>
+        <a href="./admin.html" class="nav-link nav-link--admin" title="Open CMS Admin Studio" target="_blank" rel="noopener">Admin ↗</a>
+      </nav>
+
+      <!-- Centered Kinetic Brand Typography -->
+      <div class="site-branding" id="site-branding">
+        <div class="brand-row brand-row--studio" id="brand-row-1">Better Off®</div>
+        <div class="brand-row brand-row--lookback" id="brand-row-2">THE LOOKBACK</div>
+        <div class="brand-row brand-row--year" id="brand-row-3">(BO®S/2026)</div>
+      </div>
+
+      <!-- Top Right Floating Audio Player Widget -->
+      <div class="audio-widget-wrapper" id="audio-widget-wrapper">
+        <div class="audio-pill group" id="audio-pill" role="region" aria-label="Audio Jukebox">
+          <button type="button" class="audio-toggle" id="audio-play-toggle" aria-label="Toggle Audio Playback">
+            <span class="audio-toggle__icon" id="audio-toggle-icon">
+              <!-- Play / Pause SVG -->
+              <svg class="icon-play" viewBox="0 0 8 12" width="8" height="12" fill="currentColor">
+                <path d="M8 6L0 0V12L8 6Z"></path>
+              </svg>
+              <svg class="icon-pause" viewBox="0 0 8 12" width="8" height="12" fill="currentColor">
+                <rect x="0" y="0" width="2.5" height="12" rx="1"></rect>
+                <rect x="5.5" y="0" width="2.5" height="12" rx="1"></rect>
+              </svg>
+            </span>
+          </button>
+
+          <!-- Marquee Track Display -->
+          <div class="audio-marquee-box" id="audio-marquee-box" title="Click to open playlist">
+            <div class="audio-marquee-track" id="audio-marquee-text">
+              <span>Post Malone - Overdrive / Post Malone - Overdrive / Post Malone - Overdrive / </span>
+            </div>
+          </div>
+
+          <!-- Dropdown Tracklist Menu -->
+          <div class="audio-dropdown" id="audio-dropdown" aria-label="Tracklist">
+            <div class="audio-dropdown__header">
+              <span>PLAYLIST (<span id="audio-track-count">15</span> TRACKS)</span>
+            </div>
+            <div class="audio-dropdown__list" id="audio-tracklist" role="listbox">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Views Container -->
+  <main class="site-main" id="site-main">
+
+    <!-- 1. TIMELINE VIEW -->
+    <section class="view-section is-active" id="view-timeline" data-view="timeline" aria-label="Timeline View">
+      <div class="timeline-viewport" id="timeline-viewport">
+        <div class="timeline-track" id="timeline-track">
+          <!-- Populated dynamically with carousel cards -->
+        </div>
+      </div>
+
+      <!-- Bottom Timeline Calendar Ruler -->
+      <div class="timeline-ruler-wrapper" id="timeline-ruler-wrapper">
+        <div class="timeline-ruler" id="timeline-ruler">
+          <div class="timeline-ruler__ticks" id="timeline-ruler-ticks"></div>
+          <div class="timeline-ruler__months" id="timeline-ruler-months"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. SURF 3D VIEW -->
+    <section class="view-section" id="view-surf" data-view="surf" aria-label="Surf 3D Ribbon View">
+      <div class="surf-container" id="surf-container">
+        <div class="surf-ribbon" id="surf-ribbon">
+          <!-- Populated dynamically with 3D tilted cards -->
+        </div>
+      </div>
+      <div class="surf-hint">
+        <span>Scroll / drag horizontally to surf through the archive</span>
+      </div>
+    </section>
+
+    <!-- 3. INDEX VIEW (Articles Masonry Grid) -->
+    <section class="view-section" id="view-articles" data-view="articles" aria-label="Articles Index View">
+      <div class="index-container">
+        <div class="index-grid" id="index-grid">
+          <!-- Grouped by month dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. ABOUT VIEW -->
+    <section class="view-section" id="view-about" data-view="about" aria-label="About Page View">
+      <div class="about-container">
+        <div class="about-top-labels">
+          <span class="about-tag" id="about-badge-left">( TLB )</span>
+          <span class="about-tag" id="about-badge-right">( 24-26 )</span>
+        </div>
+
+        <div class="about-video-stage">
+          <video id="about-globe-video" class="about-globe-video" autoplay loop muted playsinline>
+            <source src="./assets/videos/render-big.mp4" type="video/mp4" />
+          </video>
+        </div>
+
+        <div class="about-title-block">
+          <h2 class="about-hero-title" id="about-title">"THE LOOKBACK"</h2>
+          <span class="about-year-sub" id="about-year-label">(TLB/2026)</span>
+        </div>
+
+        <div class="about-manifesto">
+          <h3 class="about-hero-heading" id="about-hero-heading">YOUR LIVING ARCHIVE OF BETTER OFF®</h3>
+          <p class="about-paragraph about-paragraph--lead" id="about-manifesto-1">
+            WELCOME TO THE LOOKBACK — A DIGITAL REFLECTION OF OUR PULSE AND PERSONALITY. THIS IS WHERE WE LOG THE MOMENTS THAT MOVED US, INDUSTRY DROPS THAT HIT OUR RADAR, MUSIC THAT KEPT THE STUDIO LOUD, AND WORK WE BELIEVE DESERVES THE WORLD.
+          </p>
+          <p class="about-paragraph" id="about-manifesto-2">
+            IT'S NOT SO MUCH NOSTALGIA. IT'S AN ONGOING EQUATION. WE LOOK BACK TO MOVE FORWARD WITH CLARITY. EVERY MILESTONE, EVERY SPARK, EVERY OBSESSION ARCHIVED HERE MAPS THE EVOLUTION OF BETTER OFF®.
+          </p>
+        </div>
+
+        <!-- 3 Pillars Section -->
+        <div class="about-pillars" id="about-pillars">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Thanks & Footer -->
+        <div class="about-footer">
+          <div class="about-thanks">
+            <span class="about-thanks__tag">(WORD OF THANKS)</span>
+            <p class="about-thanks__heading" id="about-thanks-heading">
+              THANK YOU FOR TAPPING IN WITH US.<br />
+              THE LOOKBACK IS ONLY PART OF THE STORY.<br />
+              WE'RE BUILDING WHAT'S NEXT IN REAL TIME.
+            </p>
+            <div class="about-tagline" id="about-tagline">
+              STAY MOVING. STAY BETTER OFF®.
+            </div>
+          </div>
+
+          <div class="about-colophon">
+            <span class="about-copyright" id="about-copyright">©Better Off®/2026</span>
+            <div class="about-links">
+              <a href="https://betteroff.studio" target="_blank" rel="noopener">Better Off® Studio ↗</a>
+              <a href="mailto:hello@betteroff.studio" id="about-contact-link">Contact us</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Slide-in Article Detail Drawer -->
+  <aside id="article-drawer" class="article-drawer" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="article-drawer__backdrop" id="drawer-backdrop"></div>
+    <div class="article-drawer__panel" id="drawer-panel">
+      <!-- Drawer Top Bar -->
+      <div class="article-drawer__header">
+        <button type="button" class="drawer-btn drawer-btn--close" id="drawer-btn-close">
+          Close <span class="kbd-hint">ESC</span>
+        </button>
+
+        <div class="article-drawer__tags" id="drawer-tags">
+          <span class="badge-tag" id="drawer-badge-tag">INSPIRE</span>
+          <span class="badge-month" id="drawer-badge-month">( MARCH )</span>
+        </div>
+
+        <a href="#" target="_blank" rel="noopener" class="drawer-btn drawer-btn--source" id="drawer-source-link">
+          Source ↗
+        </a>
+      </div>
+
+      <!-- Drawer Scrollable Body -->
+      <div class="article-drawer__content">
+        <h2 class="article-drawer__title" id="drawer-title">Article Title</h2>
+        <div class="article-drawer__media" id="drawer-media"></div>
+        <div class="article-drawer__body prose" id="drawer-body"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Fixed Bottom Segmented Pill Navigation -->
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile Navigation">
+    <div class="mobile-nav__pill">
+      <button type="button" class="mobile-nav__btn is-active" data-view="timeline">Timeline</button>
+      <button type="button" class="mobile-nav__btn" data-view="surf">Surf</button>
+      <button type="button" class="mobile-nav__btn" data-view="articles">Index</button>
+      <button type="button" class="mobile-nav__btn" data-view="about">About</button>
+    </div>
+  </nav>
+
+  <!-- Audio Element (Audio Engine Source) -->
+  <audio id="site-audio" preload="auto"></audio>
+
+  <!-- Scripts -->
+  <script src="./site-data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

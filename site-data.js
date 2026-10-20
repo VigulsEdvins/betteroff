@@ -438,7 +438,7 @@
       "month": "JULY",
       "tag": "SHOWCASE",
       "date": "2025-07-01",
-      "cover": "https://www.datocms-assets.com/106915/1772287102-render2.mp4?auto=format&fit=max&h=600&q=85&w=600",
+      "cover": "./assets/images/welcome-to-the-team.webp",
       "url": "https://betteroff.studio",
       "aspect": 1.25,
       "excerpt": "Welcome To The Team: curated insight from July archive.",
