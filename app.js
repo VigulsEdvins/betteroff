@@ -297,73 +297,302 @@
   /* --------------------------------------------------------------------------
      5. Timeline View Controller
      -------------------------------------------------------------------------- */
+  /* --------------------------------------------------------------------------
+     5. Timeline View Controller (Smooth Inertia & Wheel Physics)
+     -------------------------------------------------------------------------- */
+  let timelineTargetX = 0;
+  let timelineCurrentX = 0;
+  let timelineMaxX = 0;
+  let timelineAnimId = null;
+  let currentActiveMonth = '';
+
+  const monthsOrder = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
+
+  function getMonthRank(m) {
+    const idx = monthsOrder.indexOf(String(m || '').toUpperCase());
+    return idx === -1 ? 999 : idx;
+  }
+
   function renderTimeline() {
     if (!timelineTrack) return;
-    const articles = siteData.articles || [];
+    const rawArticles = siteData.articles || [];
 
-    timelineTrack.innerHTML = articles.map((article, idx) => `
-      <article class="timeline-card" data-slug="${escapeHtml(article.slug)}" data-index="${idx}">
-        <span class="timeline-card__badge-top">${article.index || (idx + 1)}</span>
-        <div class="timeline-card__media">
-          <img src="${article.cover}" alt="${escapeHtml(article.title)}" class="timeline-card__img" loading="lazy" />
-        </div>
-        <span class="timeline-card__badge-bottom">${escapeHtml(article.tag || 'INSPIRE')} (${escapeHtml(article.month || '')})</span>
-      </article>
-    `).join('');
+    // Sort articles chronologically by month to create continuous chronological flow
+    const articles = rawArticles.slice().sort((a, b) => {
+      const rA = getMonthRank(a.month);
+      const rB = getMonthRank(b.month);
+      if (rA !== rB) return rA - rB;
+      return (a.index || 0) - (b.index || 0);
+    });
+
+    let currentMonthGroup = '';
+    timelineTrack.innerHTML = articles.map((article, idx) => {
+      const isNewMonth = article.month && article.month.toUpperCase() !== currentMonthGroup;
+      if (isNewMonth) {
+        currentMonthGroup = article.month.toUpperCase();
+      }
+      return `
+        <article class="timeline-card" data-slug="${escapeHtml(article.slug)}" data-month="${escapeHtml(article.month || '')}" data-index="${idx}">
+          ${isNewMonth ? `<div class="timeline-month-flag"><span>${escapeHtml(article.month.toUpperCase())}</span> <span>'26</span></div>` : ''}
+          <span class="timeline-card__badge-top">${article.index || (idx + 1)}</span>
+          <div class="timeline-card__media" style="aspect-ratio: ${article.aspect || 1.25};">
+            <img src="${article.cover}" alt="${escapeHtml(article.title)}" class="timeline-card__img" loading="lazy" />
+          </div>
+          <span class="timeline-card__badge-bottom">${escapeHtml(article.tag || 'INSPIRE')} (${escapeHtml(article.month || '')})</span>
+        </article>
+      `;
+    }).join('');
 
     renderTimelineRuler();
     setupTimelineDrag();
+    setTimeout(() => {
+      checkActiveMonth();
+    }, 50);
   }
 
   function renderTimelineRuler() {
     if (!rulerTicks || !rulerMonths) return;
 
-    // Render 60 ticks
+    // Render 120 ticks
     let ticksHtml = '';
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 120; i++) {
       const isMajor = i % 5 === 0;
-      ticksHtml += `<div class="ruler-tick ${isMajor ? 'ruler-tick--major' : ''}"></div>`;
+      ticksHtml += `<div class="ruler-tick ${isMajor ? 'ruler-tick--major' : ''}" data-tick="${i}"></div>`;
     }
     rulerTicks.innerHTML = ticksHtml;
 
-    // Render month markers
-    const months = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
-    rulerMonths.innerHTML = months.map(m => `<span>${m}</span>`).join('');
+    // Extract available months from articles in chronological order
+    const chronologicalMonths = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
+    const seen = new Set();
+    (siteData.articles || []).forEach(a => {
+      if (a.month) seen.add(a.month.toUpperCase());
+    });
+
+    const months = chronologicalMonths.filter(m => seen.has(m));
+    if (months.length === 0) {
+      months.push('MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL');
+    }
+
+    rulerMonths.innerHTML = months.map((m, idx) => `
+      <button type="button" class="ruler-month-btn ${idx === 0 ? 'is-active' : ''}" data-month="${escapeHtml(m)}">
+        ${escapeHtml(m)}
+      </button>
+    `).join('');
+
+    // Bind click events on month buttons to jump directly to that month
+    rulerMonths.querySelectorAll('.ruler-month-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const targetMonth = btn.dataset.month;
+        scrollToMonth(targetMonth);
+      });
+    });
   }
 
-  function setupTimelineDrag() {
-    if (!timelineViewport) return;
+  function scrollToMonth(month) {
+    if (!timelineTrack || !timelineViewport) return;
+    const upper = String(month).toUpperCase();
+    const cards = Array.from(timelineTrack.querySelectorAll('.timeline-card'));
+    const targetCard = cards.find(c => String(c.dataset.month || '').toUpperCase() === upper);
+    if (targetCard) {
+      timelineTargetX = Math.max(0, targetCard.offsetLeft - 80);
+      clampTimelineTarget();
+      startTimelineAnimation();
+      playClick();
+    }
+  }
 
+  function clampTimelineTarget() {
+    if (!timelineTrack || !timelineViewport) return;
+    timelineMaxX = Math.max(0, timelineTrack.scrollWidth - timelineViewport.clientWidth);
+    timelineTargetX = Math.max(0, Math.min(timelineTargetX, timelineMaxX));
+  }
+
+  function startTimelineAnimation() {
+    if (timelineAnimId) return;
+
+    function step() {
+      if (!timelineViewport || !timelineTrack) return;
+      const diff = timelineTargetX - timelineCurrentX;
+      const velocity = diff * 0.16;
+      timelineCurrentX += velocity;
+
+      timelineViewport.scrollLeft = timelineCurrentX;
+
+      // 3D card tilt based on velocity (matches real lookback site)
+      const tilt = Math.max(-10, Math.min(10, -velocity * 0.08));
+      const mediaList = timelineTrack.querySelectorAll('.timeline-card__media');
+      mediaList.forEach(m => {
+        m.style.transform = Math.abs(tilt) > 0.2 ? `rotateY(${tilt}deg)` : '';
+      });
+
+      // Shift ruler ticks continuously to create mechanical tick ruler illusion
+      if (rulerTicks) {
+        const tickShift = -(timelineCurrentX % 70);
+        rulerTicks.style.transform = `translate3d(${tickShift}px, 0, 0)`;
+      }
+
+      // Check active month under center viewport
+      checkActiveMonth();
+
+      if (Math.abs(diff) > 0.5) {
+        timelineAnimId = requestAnimationFrame(step);
+      } else {
+        timelineCurrentX = timelineTargetX;
+        timelineViewport.scrollLeft = timelineCurrentX;
+        mediaList.forEach(m => { m.style.transform = ''; });
+        timelineAnimId = null;
+      }
+    }
+
+    timelineAnimId = requestAnimationFrame(step);
+  }
+
+  function checkActiveMonth() {
+    if (!timelineViewport || !timelineTrack) return;
+    const cards = timelineTrack.querySelectorAll('.timeline-card');
+    if (!cards.length) return;
+
+    let activeCard = null;
+
+    // If near the end of timeline scroll, pick the last card (e.g. APRIL)
+    if (timelineMaxX > 0 && timelineCurrentX >= timelineMaxX - 80) {
+      activeCard = cards[cards.length - 1];
+    } else {
+      const focalPoint = timelineCurrentX + 120;
+      let minDistance = Infinity;
+
+      cards.forEach(card => {
+        const cardLeft = card.offsetLeft;
+        const dist = Math.abs(cardLeft - focalPoint);
+        if (dist < minDistance) {
+          minDistance = dist;
+          activeCard = card;
+        }
+      });
+    }
+
+    if (activeCard && activeCard.dataset.month) {
+      const month = String(activeCard.dataset.month).toUpperCase();
+      if (month !== currentActiveMonth) {
+        currentActiveMonth = month;
+        onActiveMonthChanged(month);
+      }
+    }
+  }
+
+  function onActiveMonthChanged(month) {
+    const upper = String(month).toUpperCase();
+
+    // 1. Update ruler buttons
+    if (rulerMonths) {
+      rulerMonths.querySelectorAll('.ruler-month-btn').forEach(btn => {
+        btn.classList.toggle('is-active', String(btn.dataset.month || '').toUpperCase() === upper);
+      });
+      const activeBtn = rulerMonths.querySelector(`.ruler-month-btn[data-month="${upper}"]`);
+      if (activeBtn) {
+        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+
+    // 2. Update header branding row (BO®S/MONTH '26)
+    const brandRow3 = document.getElementById('brand-row-3');
+    if (brandRow3) {
+      brandRow3.innerHTML = `(BO®S/${escapeHtml(upper)} '26)`;
+    }
+
+    // 3. Play tick SFX
+    playFx();
+  }
+
+  let timelineListenersBound = false;
+  function setupTimelineDrag() {
+    if (!timelineViewport || timelineListenersBound) return;
+    timelineListenersBound = true;
+
+    // Mouse Drag with inertia fling
     let isDown = false;
     let startX = 0;
-    let scrollLeft = 0;
+    let dragStartTarget = 0;
     let draggedDist = 0;
+    let lastMoveTime = 0;
+    let lastMoveX = 0;
+    let dragVelocity = 0;
 
     timelineViewport.addEventListener('mousedown', (e) => {
       isDown = true;
       timelineViewport.classList.add('is-dragging');
-      startX = e.pageX - timelineViewport.offsetLeft;
-      scrollLeft = timelineViewport.scrollLeft;
+      startX = e.pageX;
+      lastMoveX = e.pageX;
+      lastMoveTime = Date.now();
+      dragStartTarget = timelineTargetX;
       draggedDist = 0;
+      dragVelocity = 0;
     });
 
-    timelineViewport.addEventListener('mouseleave', () => {
-      isDown = false;
-      timelineViewport.classList.remove('is-dragging');
-    });
-
-    timelineViewport.addEventListener('mouseup', () => {
-      isDown = false;
-      timelineViewport.classList.remove('is-dragging');
-    });
-
-    timelineViewport.addEventListener('mousemove', (e) => {
+    window.addEventListener('mousemove', (e) => {
       if (!isDown) return;
+      const now = Date.now();
+      const dt = now - lastMoveTime || 16;
+      const dx = e.pageX - lastMoveX;
+      dragVelocity = dx / dt;
+      lastMoveX = e.pageX;
+      lastMoveTime = now;
+
+      const totalDx = e.pageX - startX;
+      draggedDist += Math.abs(dx);
+      timelineTargetX = dragStartTarget - (totalDx * 1.5);
+      clampTimelineTarget();
+      startTimelineAnimation();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDown) return;
+      isDown = false;
+      timelineViewport.classList.remove('is-dragging');
+      if (Math.abs(dragVelocity) > 0.15) {
+        timelineTargetX -= dragVelocity * 200;
+        clampTimelineTarget();
+        startTimelineAnimation();
+      }
+    });
+
+    // Wheel scrolling on timeline (translates vertical wheel to horizontal scroll with inertia)
+    const handleWheel = (e) => {
+      const section = document.getElementById('view-timeline');
+      if (!section || !section.classList.contains('is-active')) return;
+      if (activeArticleSlug) return;
+
       e.preventDefault();
-      const x = e.pageX - timelineViewport.offsetLeft;
-      const walk = (x - startX) * 1.5;
-      draggedDist += Math.abs(walk);
-      timelineViewport.scrollLeft = scrollLeft - walk;
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      timelineTargetX += delta * 1.5;
+      clampTimelineTarget();
+      startTimelineAnimation();
+    };
+
+    timelineViewport.addEventListener('wheel', handleWheel, { passive: false });
+    const timelineSec = document.getElementById('view-timeline');
+    if (timelineSec) {
+      timelineSec.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    // Keyboard Arrow navigation
+    window.addEventListener('keydown', (e) => {
+      const section = document.getElementById('view-timeline');
+      if (!section || !section.classList.contains('is-active')) return;
+      if (activeArticleSlug) return;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        timelineTargetX += 340;
+        clampTimelineTarget();
+        startTimelineAnimation();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        timelineTargetX -= 340;
+        clampTimelineTarget();
+        startTimelineAnimation();
+      }
     });
 
     // Click handler on card
@@ -375,31 +604,57 @@
       }
     });
 
-    // Touch support for timeline
+    // Touch support (Mobile swipe with inertia)
     let touchStartX = 0;
+    let touchStartTarget = 0;
+    let touchLastX = 0;
+    let touchLastTime = 0;
+    let touchVelocity = 0;
+
     timelineViewport.addEventListener('touchstart', (e) => {
+      if (!e.touches.length) return;
       touchStartX = e.touches[0].pageX;
+      touchLastX = touchStartX;
+      touchLastTime = Date.now();
+      touchStartTarget = timelineTargetX;
       draggedDist = 0;
+      touchVelocity = 0;
     }, { passive: true });
 
     timelineViewport.addEventListener('touchmove', (e) => {
-      const touchX = e.touches[0].pageX;
-      draggedDist += Math.abs(touchX - touchStartX);
+      if (!e.touches.length) return;
+      const currentX = e.touches[0].pageX;
+      const now = Date.now();
+      const dt = now - touchLastTime || 16;
+      const dx = currentX - touchLastX;
+      touchVelocity = dx / dt;
+      touchLastX = currentX;
+      touchLastTime = now;
+
+      const totalDx = currentX - touchStartX;
+      draggedDist += Math.abs(dx);
+      timelineTargetX = touchStartTarget - (totalDx * 1.3);
+      clampTimelineTarget();
+      startTimelineAnimation();
     }, { passive: true });
 
     timelineViewport.addEventListener('touchend', (e) => {
+      if (Math.abs(touchVelocity) > 0.15) {
+        timelineTargetX -= touchVelocity * 200;
+        clampTimelineTarget();
+        startTimelineAnimation();
+      }
       if (draggedDist < 10) {
         const card = e.target.closest('.timeline-card');
-        if (card) {
-          const slug = card.dataset.slug;
-          openArticleDrawer(slug);
+        if (card && card.dataset.slug) {
+          openArticleDrawer(card.dataset.slug);
         }
       }
     });
   }
 
   /* --------------------------------------------------------------------------
-     6. Surf 3D View Controller
+     6. Surf 3D View Controller (With Wheel Scrolling)
      -------------------------------------------------------------------------- */
   function renderSurf() {
     if (!surfRibbon) return;
@@ -414,8 +669,10 @@
     setupSurfDrag();
   }
 
+  let surfListenersBound = false;
   function setupSurfDrag() {
-    if (!surfContainer) return;
+    if (!surfContainer || surfListenersBound) return;
+    surfListenersBound = true;
 
     let isDown = false;
     let startX = 0;
@@ -430,17 +687,17 @@
       draggedDist = 0;
     });
 
-    surfContainer.addEventListener('mouseleave', () => {
+    window.addEventListener('mouseleave', () => {
       isDown = false;
       surfContainer.classList.remove('is-dragging');
     });
 
-    surfContainer.addEventListener('mouseup', () => {
+    window.addEventListener('mouseup', () => {
       isDown = false;
       surfContainer.classList.remove('is-dragging');
     });
 
-    surfContainer.addEventListener('mousemove', (e) => {
+    window.addEventListener('mousemove', (e) => {
       if (!isDown) return;
       e.preventDefault();
       const x = e.pageX - surfContainer.offsetLeft;
@@ -448,6 +705,17 @@
       draggedDist += Math.abs(walk);
       surfContainer.scrollLeft = scrollLeft - walk;
     });
+
+    // Wheel scrolling on Surf container
+    surfContainer.addEventListener('wheel', (e) => {
+      const section = document.getElementById('view-surf');
+      if (!section || !section.classList.contains('is-active')) return;
+      if (activeArticleSlug) return;
+
+      e.preventDefault();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      surfContainer.scrollLeft += delta * 1.5;
+    }, { passive: false });
 
     surfContainer.addEventListener('click', (e) => {
       const card = e.target.closest('.surf-card');
@@ -459,13 +727,12 @@
   }
 
   /* --------------------------------------------------------------------------
-     7. Index View Controller (Grouped by Month)
+     7. Index View Controller (Grouped by Month with Quick Jump)
      -------------------------------------------------------------------------- */
   function renderIndex() {
     if (!indexGrid) return;
     const articles = siteData.articles || [];
 
-    // Group articles by month in chronological order
     const monthsOrder = ['MARCH', 'FEBRUARY', 'JANUARY', 'DECEMBER', 'NOVEMBER', 'OCTOBER', 'SEPTEMBER', 'AUGUST', 'JULY', 'JUNE', 'MAY', 'APRIL'];
     const groups = {};
     monthsOrder.forEach(m => groups[m] = []);
@@ -476,15 +743,24 @@
       groups[m].push(a);
     });
 
-    let html = '';
-    monthsOrder.forEach(m => {
-      const list = groups[m] || [];
-      if (!list.length) return;
+    const activeMonths = monthsOrder.filter(m => (groups[m] || []).length > 0);
 
+    let html = `
+      <div class="index-month-nav" id="index-month-nav">
+        ${activeMonths.map(m => `
+          <button type="button" class="index-month-nav-btn" data-target="index-month-${escapeHtml(m)}">
+            ${escapeHtml(m)} (${groups[m].length})
+          </button>
+        `).join('')}
+      </div>
+    `;
+
+    activeMonths.forEach(m => {
+      const list = groups[m] || [];
       html += `
-        <div class="index-month-section">
+        <div class="index-month-section" id="index-month-${escapeHtml(m)}">
           <div class="index-month-header">
-            <span>${m}</span>
+            <span>${escapeHtml(m)}</span>
             <span>(${list.length} ITEMS)</span>
           </div>
           <div class="index-cards-row">
@@ -501,6 +777,18 @@
     });
 
     indexGrid.innerHTML = html;
+
+    // Month nav click jump
+    indexGrid.querySelectorAll('.index-month-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.target;
+        const targetElem = document.getElementById(targetId);
+        if (targetElem) {
+          targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          playClick();
+        }
+      });
+    });
 
     indexGrid.querySelectorAll('.index-card').forEach(card => {
       card.addEventListener('click', () => {

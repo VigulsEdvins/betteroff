@@ -541,13 +541,14 @@ img, video {
 
 .timeline-viewport {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
   cursor: grab;
   padding-bottom: 2rem;
   margin-bottom: 3.5rem;
+  perspective: 1200px;
 }
 
 .timeline-viewport::-webkit-scrollbar {
@@ -563,7 +564,7 @@ img, video {
   display: inline-flex;
   align-items: flex-end;
   gap: 1.5rem;
-  padding: 0 40vw 0 5vw;
+  padding: 0 45vw 0 6vw;
   height: 48vh;
   will-change: transform;
 }
@@ -574,11 +575,39 @@ img, video {
   flex-direction: column;
   flex-shrink: 0;
   cursor: pointer;
-  transition: transform 0.4s var(--ease-expo);
 }
 
 .timeline-card:hover {
   transform: translateY(-8px);
+}
+
+.timeline-month-flag {
+  position: absolute;
+  bottom: calc(100% + 1.25rem);
+  left: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--black);
+  background-color: rgba(0, 0, 0, 0.06);
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeline-month-flag::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--accent-orange);
 }
 
 .timeline-card__badge-top {
@@ -600,12 +629,15 @@ img, video {
   overflow: hidden;
   background-color: #ddd;
   box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  transform-style: preserve-3d;
+  will-change: transform;
+  height: 38vh;
+  max-width: 28vw;
 }
 
 .timeline-card__img {
-  width: auto;
-  height: 38vh;
-  max-width: 28vw;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
   transition: transform 0.6s var(--ease-expo);
@@ -629,16 +661,19 @@ img, video {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 4.5rem;
+  height: 5rem;
   pointer-events: none;
   z-index: 50;
   border-top: 1px solid rgba(0,0,0,0.08);
+  background: linear-gradient(to top, rgba(244,244,242,0.96), rgba(244,244,242,0.7) 80%, transparent);
+  backdrop-filter: blur(8px);
 }
 
 .timeline-ruler {
   position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .timeline-ruler__ticks {
@@ -646,35 +681,80 @@ img, video {
   top: 0;
   left: 0;
   right: 0;
-  height: 1rem;
+  height: 1.5rem;
   display: flex;
-  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
   padding: 0 1rem;
+  will-change: transform;
 }
 
 .ruler-tick {
   width: 1px;
-  height: 12px;
-  background-color: #bbb;
+  height: 10px;
+  background-color: #aaa;
+  flex-shrink: 0;
+  transition: height 0.2s ease, background-color 0.2s ease;
 }
 
 .ruler-tick--major {
-  height: 24px;
-  background-color: #222;
+  height: 22px;
+  background-color: #111;
+  width: 1.5px;
+}
+
+.ruler-tick.is-active {
+  height: 28px;
+  background-color: #000;
+  width: 2px;
 }
 
 .timeline-ruler__months {
   position: absolute;
-  bottom: 1rem;
+  bottom: 0.75rem;
   left: 0;
   right: 0;
   display: flex;
-  justify-content: space-around;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  pointer-events: auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 1rem;
+}
+
+.timeline-ruler__months::-webkit-scrollbar {
+  display: none;
+}
+
+.ruler-month-btn {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.76rem;
+  font-weight: 500;
   text-transform: uppercase;
-  color: var(--text-color);
+  color: #777;
+  background: none;
+  border: 1px solid transparent;
+  padding: 0.35rem 0.65rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ruler-month-btn:hover {
+  color: #000;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.ruler-month-btn.is-active {
+  color: #000;
+  font-weight: 700;
+  background-color: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.18);
+  transform: scale(1.05);
 }
 
 /* 10. SURF 3D VIEW STYLES */
@@ -767,10 +847,45 @@ img, video {
   gap: 4rem;
 }
 
+.index-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 2.5rem;
+  position: sticky;
+  top: 5rem;
+  background: rgba(244, 244, 242, 0.92);
+  backdrop-filter: blur(8px);
+  padding: 0.85rem 0;
+  z-index: 10;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.index-month-nav-btn {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: #666;
+  background-color: var(--white);
+  border: 1px solid var(--pill-border);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.index-month-nav-btn:hover {
+  color: var(--black);
+  border-color: #999;
+  background-color: #eee;
+}
+
 .index-month-section {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  scroll-margin-top: 10rem;
 }
 
 .index-month-header {
