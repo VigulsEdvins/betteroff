@@ -1110,27 +1110,33 @@ body.is-about #site-branding {
   pointer-events: none;
 }
 
-/* Scrollable Container with Hidden Scrollbars */
+/* Scrollable Container (Virtual Scroll Infinite Loop) */
 .about-scroller {
   position: absolute;
   inset: 0;
-  overflow-y: scroll;
-  overflow-x: hidden;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  overflow: hidden;
   z-index: 3;
+  cursor: grab;
 }
 
-.about-scroller::-webkit-scrollbar {
-  display: none;
+.about-scroller.is-dragging {
+  cursor: grabbing;
 }
 
 .about-content {
   position: relative;
   max-width: 1500px;
   margin: 0 auto;
-  padding: 0 2rem 8rem 2rem;
+  padding: 0 2rem 0 2rem;
   pointer-events: auto;
+}
+
+.about-block {
+  will-change: transform;
+}
+
+.about-thanks-block {
+  margin-bottom: 12rem;
 }
 
 .about-top-space {

@@ -1101,11 +1101,13 @@
   }
 
   /* --------------------------------------------------------------------------
-     8. About View Controller (Dark Cinematic Atmosphere, Virtual Scroll, & 3D Trajectory)
+     8. About View Controller (Infinite Looping Virtual Scroll & 3D Trajectory)
      -------------------------------------------------------------------------- */
   let aboutTargetY = 0;
   let aboutCurrentY = 0;
   let aboutAnimId = null;
+  let aboutBlocks = [];
+  let aboutTotalHeight = 0;
   let aboutListenersBound = false;
   const soundGil = new Audio('./assets/audio/sound-gil.mp3');
   const soundJesper = new Audio('./assets/audio/sound-jesper.mp3');
@@ -1160,7 +1162,137 @@
     }
 
     setupAboutPopovers();
+    measureAboutBlocks();
     setupAboutScroll();
+    if (currentView === 'about') {
+      startAboutAnimation();
+    }
+  }
+
+  function measureAboutBlocks() {
+    const scroller = document.getElementById('about-scroller');
+    const content = document.getElementById('about-content');
+    if (!scroller || !content) return;
+
+    const blockEls = Array.from(content.querySelectorAll('[data-smooth]'));
+    if (!blockEls.length) return;
+
+    // Reset transforms to measure clean base positions
+    blockEls.forEach(b => {
+      b.style.transform = 'translate3d(0px, 0px, 0px)';
+    });
+
+    const contentRect = content.getBoundingClientRect();
+    const wh = window.innerHeight;
+
+    aboutBlocks = blockEls.map((el, idx) => {
+      const rect = el.getBoundingClientRect();
+      const top = rect.top - contentRect.top;
+      const height = rect.height;
+      const bottom = top + height;
+      const start = top - wh;
+      const end = bottom;
+      return { el, index: idx, top, height, bottom, start, end };
+    });
+
+    const lastBlock = aboutBlocks[aboutBlocks.length - 1];
+    const lastMargin = parseInt(window.getComputedStyle(lastBlock.el).marginBottom) || 0;
+    aboutTotalHeight = Math.max(wh * 1.5, lastBlock.bottom + lastMargin);
+  }
+
+  function updateAboutFrame() {
+    if (!aboutBlocks.length || !aboutTotalHeight) return;
+
+    const diff = aboutTargetY - aboutCurrentY;
+    aboutCurrentY += diff * 0.12;
+
+    const wh = window.innerHeight;
+    const buffer = wh * 0.05;
+
+    aboutBlocks.forEach(item => {
+      // Exact infinite wrap from Nuxt wyNRnxoT.js:
+      // o = wrap(-(totalHeight - item.end), item.end, scroll)
+      const minWrap = -(aboutTotalHeight - item.end);
+      const maxWrap = item.end;
+      const o = wrap(minWrap, maxWrap, aboutCurrentY);
+
+      // Check visibility bounds
+      const visible = (o > item.start - buffer) && (o < item.end + buffer);
+      if (!visible) {
+        item.el.style.visibility = 'hidden';
+      } else {
+        item.el.style.visibility = 'visible';
+        item.el.style.transform = `translate3d(0px, ${(-o).toFixed(1)}px, 0px)`;
+      }
+    });
+
+    // Animate 3D Globe Sculpture along trajectory
+    const globeMedia = document.getElementById('about-globe-media');
+    if (globeMedia) {
+      const ww = window.innerWidth;
+      if (ww >= 900) {
+        // Continuous normalized cycle [0, 1)
+        const cycleScroll = wrap(0, aboutTotalHeight, aboutCurrentY);
+        const progress = cycleScroll / aboutTotalHeight;
+
+        let x = 0;
+        let y = 0;
+        let scale = 1.0;
+
+        if (progress <= 0.15) {
+          x = 0;
+          y = 0;
+          scale = 1.0;
+        } else if (progress <= 0.45) {
+          const t = (progress - 0.15) / 0.30;
+          const ease = Math.sin(t * Math.PI / 2);
+          x = - (ww * 0.28 * ease);
+          y = (wh * 0.22 * ease);
+          scale = 1.0 - (0.45 * ease);
+        } else if (progress <= 0.75) {
+          const t = (progress - 0.45) / 0.30;
+          const ease = Math.sin(t * Math.PI / 2);
+          const startX = - (ww * 0.28);
+          const targetX = (ww * 0.08);
+          x = startX + (targetX - startX) * ease;
+          y = (wh * 0.22) + (wh * 0.04 * ease);
+          scale = 0.55 - (0.05 * ease);
+        } else {
+          const t = (progress - 0.75) / 0.25;
+          const ease = Math.sin(t * Math.PI / 2);
+          const startX = (ww * 0.08);
+          x = startX * (1 - ease);
+          y = (wh * 0.26) * (1 - ease);
+          scale = 0.50 + (0.35 * ease);
+        }
+
+        globeMedia.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0px) scale(${scale.toFixed(3)})`;
+      } else {
+        globeMedia.style.transform = '';
+      }
+    }
+  }
+
+  function aboutAnimationLoop() {
+    if (currentView !== 'about') {
+      aboutAnimId = null;
+      return;
+    }
+    updateAboutFrame();
+    aboutAnimId = requestAnimationFrame(aboutAnimationLoop);
+  }
+
+  function startAboutAnimation() {
+    if (aboutAnimId) return;
+    measureAboutBlocks();
+    aboutAnimId = requestAnimationFrame(aboutAnimationLoop);
+  }
+
+  function stopAboutAnimation() {
+    if (aboutAnimId) {
+      cancelAnimationFrame(aboutAnimId);
+      aboutAnimId = null;
+    }
   }
 
   function setupAboutPopovers() {
@@ -1238,20 +1370,19 @@
     const scroller = document.getElementById('about-scroller');
     if (!scroller) return;
 
-    // Wheel scrolling
+    // Wheel scrolling (infinite loop - never clamped)
     window.addEventListener('wheel', (e) => {
       if (currentView !== 'about') return;
       if (activeArticleSlug) return;
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      aboutTargetY += delta * 1.3;
-      clampAboutTarget();
-      startAboutAnimation();
+      aboutTargetY += delta * 1.5;
+      if (!aboutAnimId) startAboutAnimation();
     }, { passive: false });
 
-    // Touch events
+    // Touch events (mobile - infinite loop)
     let touchStartY = 0;
-    let touchStartScroll = 0;
+    let touchStartTarget = 0;
     let touchVelocity = 0;
     let lastTouchY = 0;
     let lastTouchTime = 0;
@@ -1262,7 +1393,7 @@
       touchStartY = e.touches[0].clientY;
       lastTouchY = touchStartY;
       lastTouchTime = Date.now();
-      touchStartScroll = aboutTargetY;
+      touchStartTarget = aboutTargetY;
       touchVelocity = 0;
       isTouchDragging = true;
     }, { passive: true });
@@ -1278,116 +1409,83 @@
       lastTouchTime = now;
 
       const totalDy = cy - touchStartY;
-      aboutTargetY = touchStartScroll - (totalDy * 1.8);
-      clampAboutTarget();
-      startAboutAnimation();
+      aboutTargetY = touchStartTarget - (totalDy * 1.8);
+      if (!aboutAnimId) startAboutAnimation();
     }, { passive: true });
 
     scroller.addEventListener('touchend', () => {
       if (!isTouchDragging) return;
       isTouchDragging = false;
       if (Math.abs(touchVelocity) > 0.15) {
-        aboutTargetY -= touchVelocity * 200;
-        clampAboutTarget();
-        startAboutAnimation();
+        aboutTargetY -= touchVelocity * 220;
+        if (!aboutAnimId) startAboutAnimation();
       }
     });
-  }
 
-  function clampAboutTarget() {
-    const scroller = document.getElementById('about-scroller');
-    const content = document.getElementById('about-content');
-    if (!scroller || !content) return;
-    const maxScroll = Math.max(0, content.offsetHeight - window.innerHeight);
-    aboutTargetY = Math.max(0, Math.min(maxScroll, aboutTargetY));
-  }
+    // Mouse drag with momentum
+    let isMouseDown = false;
+    let mouseStartY = 0;
+    let mouseStartTarget = 0;
+    let mouseLastY = 0;
+    let mouseLastTime = 0;
+    let mouseVelocity = 0;
 
-  function startAboutAnimation() {
-    if (aboutAnimId) return;
+    scroller.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button, a, input')) return;
+      isMouseDown = true;
+      scroller.classList.add('is-dragging');
+      mouseStartY = e.clientY;
+      mouseLastY = e.clientY;
+      mouseLastTime = Date.now();
+      mouseStartTarget = aboutTargetY;
+      mouseVelocity = 0;
+    });
 
-    function step() {
-      if (currentView !== 'about') {
-        aboutAnimId = null;
-        return;
+    window.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return;
+      const now = Date.now();
+      const dt = now - mouseLastTime || 16;
+      const dy = e.clientY - mouseLastY;
+      mouseVelocity = dy / dt;
+      mouseLastY = e.clientY;
+      mouseLastTime = now;
+
+      const totalDy = e.clientY - mouseStartY;
+      aboutTargetY = mouseStartTarget - (totalDy * 1.8);
+      if (!aboutAnimId) startAboutAnimation();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isMouseDown) return;
+      isMouseDown = false;
+      scroller.classList.remove('is-dragging');
+      if (Math.abs(mouseVelocity) > 0.15) {
+        aboutTargetY -= mouseVelocity * 220;
+        if (!aboutAnimId) startAboutAnimation();
       }
+    });
 
-      const diff = aboutTargetY - aboutCurrentY;
-      aboutCurrentY += diff * 0.12;
-
-      const scroller = document.getElementById('about-scroller');
-      const content = document.getElementById('about-content');
-      const globeMedia = document.getElementById('about-globe-media');
-
-      if (scroller) {
-        scroller.scrollTop = aboutCurrentY;
+    // Keyboard support
+    window.addEventListener('keydown', (e) => {
+      if (currentView !== 'about' || activeArticleSlug) return;
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        e.preventDefault();
+        aboutTargetY += 250;
+        if (!aboutAnimId) startAboutAnimation();
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        e.preventDefault();
+        aboutTargetY -= 250;
+        if (!aboutAnimId) startAboutAnimation();
       }
+    });
 
-      // Compute globe trajectory
-      if (globeMedia && content) {
-        const maxScroll = Math.max(1, content.offsetHeight - window.innerHeight);
-        const progress = Math.max(0, Math.min(1, aboutCurrentY / maxScroll));
-        const ww = window.innerWidth;
-        const wh = window.innerHeight;
-
-        if (ww >= 900) {
-          let x = 0;
-          let y = 0;
-          let scale = 1.0;
-
-          if (progress <= 0.12) {
-            // Hero center
-            x = 0;
-            y = 0;
-            scale = 1.0;
-          } else if (progress <= 0.42) {
-            // Move smoothly to bottom-left (next to highlights)
-            const t = (progress - 0.12) / 0.30;
-            const ease = Math.sin(t * Math.PI / 2);
-            x = - (ww * 0.28 * ease);
-            y = (wh * 0.22 * ease);
-            scale = 1.0 - (0.45 * ease);
-          } else if (progress <= 0.72) {
-            // Move across to bottom-right/center (under looking forward)
-            const t = (progress - 0.42) / 0.30;
-            const ease = Math.sin(t * Math.PI / 2);
-            const startX = - (ww * 0.28);
-            const targetX = (ww * 0.08);
-            x = startX + (targetX - startX) * ease;
-            y = (wh * 0.22) + (wh * 0.04 * ease);
-            scale = 0.55 - (0.05 * ease);
-          } else {
-            // Return towards center for thanks block
-            const t = (progress - 0.72) / 0.28;
-            const ease = Math.sin(t * Math.PI / 2);
-            const startX = (ww * 0.08);
-            x = startX * (1 - ease);
-            y = (wh * 0.26) * (1 - ease);
-            scale = 0.50 + (0.35 * ease);
-          }
-
-          globeMedia.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0px) scale(${scale.toFixed(3)})`;
-        } else {
-          globeMedia.style.transform = '';
-        }
+    // Window resize
+    window.addEventListener('resize', () => {
+      if (currentView === 'about') {
+        measureAboutBlocks();
+        updateAboutFrame();
       }
-
-      if (Math.abs(diff) > 0.5) {
-        aboutAnimId = requestAnimationFrame(step);
-      } else {
-        aboutCurrentY = aboutTargetY;
-        if (scroller) scroller.scrollTop = aboutCurrentY;
-        aboutAnimId = null;
-      }
-    }
-
-    aboutAnimId = requestAnimationFrame(step);
-  }
-
-  function stopAboutAnimation() {
-    if (aboutAnimId) {
-      cancelAnimationFrame(aboutAnimId);
-      aboutAnimId = null;
-    }
+    });
   }
 
   /* --------------------------------------------------------------------------
