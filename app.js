@@ -282,6 +282,14 @@
     } else {
       stopSurfAnimation();
     }
+
+    if (viewName === 'about') {
+      document.body.classList.add('is-about');
+      startAboutAnimation();
+    } else {
+      document.body.classList.remove('is-about');
+      stopAboutAnimation();
+    }
   }
 
   function handleHashChange() {
@@ -1093,45 +1101,292 @@
   }
 
   /* --------------------------------------------------------------------------
-     8. About View Controller
+     8. About View Controller (Dark Cinematic Atmosphere, Virtual Scroll, & 3D Trajectory)
      -------------------------------------------------------------------------- */
+  let aboutTargetY = 0;
+  let aboutCurrentY = 0;
+  let aboutAnimId = null;
+  let aboutListenersBound = false;
+  const soundGil = new Audio('./assets/audio/sound-gil.mp3');
+  const soundJesper = new Audio('./assets/audio/sound-jesper.mp3');
+
   function renderAbout() {
     const about = siteData.about || {};
     const badgeLeft = document.getElementById('about-badge-left');
     const badgeRight = document.getElementById('about-badge-right');
     const title = document.getElementById('about-title');
-    const yearLabel = document.getElementById('about-year-label');
-    const heroHeading = document.getElementById('about-hero-heading');
     const manifesto1 = document.getElementById('about-manifesto-1');
     const manifesto2 = document.getElementById('about-manifesto-2');
     const pillarsContainer = document.getElementById('about-pillars');
-    const thanksHeading = document.getElementById('about-thanks-heading');
-    const tagline = document.getElementById('about-tagline');
     const copyright = document.getElementById('about-copyright');
-    const contactLink = document.getElementById('about-contact-link');
 
-    if (badgeLeft) badgeLeft.textContent = about.badgeLeft || '( TLB )';
-    if (badgeRight) badgeRight.textContent = about.badgeRight || '( 24-26 )';
-    if (title) title.textContent = about.title || '"THE LOOKBACK"';
-    if (yearLabel) yearLabel.textContent = about.yearLabel || '(TLB/2026)';
-    if (heroHeading) heroHeading.textContent = about.heroHeading || 'YOUR LIVING ARCHIVE OF BETTER OFF®';
+    if (badgeLeft) badgeLeft.textContent = about.badgeLeft || '(TLB)';
+    if (badgeRight) badgeRight.textContent = about.badgeRight || '(24-26)';
+    if (title) {
+      title.innerHTML = `"The Lookback"<br />(TLB/2026)<br />Your living<br />archive of<br />Better Off®`;
+    }
     if (manifesto1) manifesto1.textContent = about.manifesto1 || '';
     if (manifesto2) manifesto2.textContent = about.manifesto2 || '';
-    if (thanksHeading) thanksHeading.innerHTML = (about.thanksHeading || '').replace(/\\n/g, '<br />');
-    if (tagline) tagline.textContent = about.tagline || 'STAY MOVING. STAY BETTER OFF®.';
     if (copyright) copyright.textContent = about.copyright || '©Better Off®/2026';
-    if (contactLink && about.contactEmail) {
-      contactLink.href = `mailto:${about.contactEmail}`;
+
+    const pillars = about.pillars || [
+      {
+        num: '(1)',
+        title: 'OUR HIGHLIGHTS',
+        text: 'THE WINS, THE WORK, THE MOMENTS THAT DEFINED THE YEAR—SIGNATURE PROJECTS, RECOGNITIONS, AND MILESTONES TO SHOWCASE WHAT PUSHES US FORWARD.'
+      },
+      {
+        num: '(2)',
+        title: 'WHAT INSPIRED US',
+        text: 'THE INSPIRATIONAL CURRENTS, PRODUCT DROPS, COLLABORATIONS, AND SOUNDS THAT KEPT OUR THINKING SHARP AND OUR KEYBOARDS HUMMING.'
+      },
+      {
+        num: '(3)',
+        title: 'LOOKING FORWARD',
+        text: 'WHAT\'S NEXT. THE IDEAS IN MOTION, THE VISION IN DEVELOPMENT, AND THE DIRECTION WE\'RE STEPPING TOWARD—ON PURPOSE.'
+      }
+    ];
+
+    if (pillarsContainer) {
+      pillarsContainer.innerHTML = pillars.map(p => `
+        <li class="about-pillar-item">
+          <div class="about-pillar-num">${escapeHtml(p.num)}</div>
+          <div class="about-pillar-body">
+            <h3 class="about-pillar-title">${escapeHtml(p.title)}</h3>
+            <p class="about-pillar-desc">${escapeHtml(p.text)}</p>
+          </div>
+        </li>
+      `).join('');
     }
 
-    if (pillarsContainer && about.pillars) {
-      pillarsContainer.innerHTML = about.pillars.map(p => `
-        <div class="pillar-item">
-          <span class="pillar-num">${escapeHtml(p.num)}</span>
-          <h4 class="pillar-title">${escapeHtml(p.title)}</h4>
-          <p class="pillar-text">${escapeHtml(p.text)}</p>
-        </div>
-      `).join('');
+    setupAboutPopovers();
+    setupAboutScroll();
+  }
+
+  function setupAboutPopovers() {
+    // Credits popover
+    const btnCredits = document.getElementById('btn-site-credits');
+    const popoverCredits = document.getElementById('credits-popover');
+    const creditGil = document.getElementById('credit-gil');
+    const creditJesper = document.getElementById('credit-jesper');
+
+    if (btnCredits && popoverCredits) {
+      btnCredits.onclick = (e) => {
+        e.stopPropagation();
+        popoverCredits.classList.toggle('is-hidden');
+      };
+
+      if (creditGil) {
+        creditGil.onmouseenter = () => {
+          if (isSoundEnabled) {
+            soundGil.currentTime = 0;
+            soundGil.play().catch(() => {});
+          }
+        };
+      }
+
+      if (creditJesper) {
+        creditJesper.onmouseenter = () => {
+          if (isSoundEnabled) {
+            soundJesper.currentTime = 0;
+            soundJesper.play().catch(() => {});
+          }
+        };
+      }
+    }
+
+    // Contact popover & copy email
+    const btnContact = document.getElementById('btn-contact-us');
+    const popoverContact = document.getElementById('contact-popover');
+    const btnCopyEmail = document.getElementById('btn-copy-email');
+
+    if (btnContact && popoverContact) {
+      btnContact.onclick = (e) => {
+        e.stopPropagation();
+        popoverContact.classList.toggle('is-hidden');
+      };
+    }
+
+    if (btnCopyEmail) {
+      btnCopyEmail.onclick = async (e) => {
+        e.stopPropagation();
+        const email = siteData.about?.contactEmail || 'info@betteroff.studio';
+        try {
+          await navigator.clipboard.writeText(email);
+          btnCopyEmail.textContent = 'Copied!';
+          setTimeout(() => {
+            btnCopyEmail.textContent = 'Copy email';
+            if (popoverContact) popoverContact.classList.add('is-hidden');
+          }, 2000);
+        } catch {
+          btnCopyEmail.textContent = email;
+        }
+      };
+    }
+
+    // Close popovers on click outside
+    window.addEventListener('click', () => {
+      if (popoverCredits) popoverCredits.classList.add('is-hidden');
+      if (popoverContact) popoverContact.classList.add('is-hidden');
+    });
+  }
+
+  function setupAboutScroll() {
+    if (aboutListenersBound) return;
+    aboutListenersBound = true;
+
+    const scroller = document.getElementById('about-scroller');
+    if (!scroller) return;
+
+    // Wheel scrolling
+    window.addEventListener('wheel', (e) => {
+      if (currentView !== 'about') return;
+      if (activeArticleSlug) return;
+      e.preventDefault();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      aboutTargetY += delta * 1.3;
+      clampAboutTarget();
+      startAboutAnimation();
+    }, { passive: false });
+
+    // Touch events
+    let touchStartY = 0;
+    let touchStartScroll = 0;
+    let touchVelocity = 0;
+    let lastTouchY = 0;
+    let lastTouchTime = 0;
+    let isTouchDragging = false;
+
+    scroller.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      touchStartY = e.touches[0].clientY;
+      lastTouchY = touchStartY;
+      lastTouchTime = Date.now();
+      touchStartScroll = aboutTargetY;
+      touchVelocity = 0;
+      isTouchDragging = true;
+    }, { passive: true });
+
+    scroller.addEventListener('touchmove', (e) => {
+      if (!isTouchDragging || e.touches.length !== 1) return;
+      const now = Date.now();
+      const dt = now - lastTouchTime || 16;
+      const cy = e.touches[0].clientY;
+      const dy = cy - lastTouchY;
+      touchVelocity = dy / dt;
+      lastTouchY = cy;
+      lastTouchTime = now;
+
+      const totalDy = cy - touchStartY;
+      aboutTargetY = touchStartScroll - (totalDy * 1.8);
+      clampAboutTarget();
+      startAboutAnimation();
+    }, { passive: true });
+
+    scroller.addEventListener('touchend', () => {
+      if (!isTouchDragging) return;
+      isTouchDragging = false;
+      if (Math.abs(touchVelocity) > 0.15) {
+        aboutTargetY -= touchVelocity * 200;
+        clampAboutTarget();
+        startAboutAnimation();
+      }
+    });
+  }
+
+  function clampAboutTarget() {
+    const scroller = document.getElementById('about-scroller');
+    const content = document.getElementById('about-content');
+    if (!scroller || !content) return;
+    const maxScroll = Math.max(0, content.offsetHeight - window.innerHeight);
+    aboutTargetY = Math.max(0, Math.min(maxScroll, aboutTargetY));
+  }
+
+  function startAboutAnimation() {
+    if (aboutAnimId) return;
+
+    function step() {
+      if (currentView !== 'about') {
+        aboutAnimId = null;
+        return;
+      }
+
+      const diff = aboutTargetY - aboutCurrentY;
+      aboutCurrentY += diff * 0.12;
+
+      const scroller = document.getElementById('about-scroller');
+      const content = document.getElementById('about-content');
+      const globeMedia = document.getElementById('about-globe-media');
+
+      if (scroller) {
+        scroller.scrollTop = aboutCurrentY;
+      }
+
+      // Compute globe trajectory
+      if (globeMedia && content) {
+        const maxScroll = Math.max(1, content.offsetHeight - window.innerHeight);
+        const progress = Math.max(0, Math.min(1, aboutCurrentY / maxScroll));
+        const ww = window.innerWidth;
+        const wh = window.innerHeight;
+
+        if (ww >= 900) {
+          let x = 0;
+          let y = 0;
+          let scale = 1.0;
+
+          if (progress <= 0.12) {
+            // Hero center
+            x = 0;
+            y = 0;
+            scale = 1.0;
+          } else if (progress <= 0.42) {
+            // Move smoothly to bottom-left (next to highlights)
+            const t = (progress - 0.12) / 0.30;
+            const ease = Math.sin(t * Math.PI / 2);
+            x = - (ww * 0.28 * ease);
+            y = (wh * 0.22 * ease);
+            scale = 1.0 - (0.45 * ease);
+          } else if (progress <= 0.72) {
+            // Move across to bottom-right/center (under looking forward)
+            const t = (progress - 0.42) / 0.30;
+            const ease = Math.sin(t * Math.PI / 2);
+            const startX = - (ww * 0.28);
+            const targetX = (ww * 0.08);
+            x = startX + (targetX - startX) * ease;
+            y = (wh * 0.22) + (wh * 0.04 * ease);
+            scale = 0.55 - (0.05 * ease);
+          } else {
+            // Return towards center for thanks block
+            const t = (progress - 0.72) / 0.28;
+            const ease = Math.sin(t * Math.PI / 2);
+            const startX = (ww * 0.08);
+            x = startX * (1 - ease);
+            y = (wh * 0.26) * (1 - ease);
+            scale = 0.50 + (0.35 * ease);
+          }
+
+          globeMedia.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0px) scale(${scale.toFixed(3)})`;
+        } else {
+          globeMedia.style.transform = '';
+        }
+      }
+
+      if (Math.abs(diff) > 0.5) {
+        aboutAnimId = requestAnimationFrame(step);
+      } else {
+        aboutCurrentY = aboutTargetY;
+        if (scroller) scroller.scrollTop = aboutCurrentY;
+        aboutAnimId = null;
+      }
+    }
+
+    aboutAnimId = requestAnimationFrame(step);
+  }
+
+  function stopAboutAnimation() {
+    if (aboutAnimId) {
+      cancelAnimationFrame(aboutAnimId);
+      aboutAnimId = null;
     }
   }
 
